@@ -21,6 +21,10 @@ app.use('/api/user', userRouter)
 app.use('/api/cart', cartRouter)
 app.use('/api/order', orderRouter)
 
+app.get('/alive', (req, res) => {
+    res.json({ status: 'Server is alive' });
+});
+
 app.get('/', (req, res) => {
     res.send("API working")
 })
