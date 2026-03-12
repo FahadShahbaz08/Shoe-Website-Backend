@@ -36,7 +36,7 @@ cron.schedule('*/10 * * * *', async () => {
     try {
         console.log("Running cron job...")
 
-        const response = await axios.get(`http://localhost:${port}/alive`)
+        const response = await axios.get(`https://shoe-website-backend-yr31.onrender.com/alive`)
 
         console.log("Cron API response:", response.data)
     } catch (error) {
