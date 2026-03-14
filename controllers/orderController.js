@@ -50,8 +50,29 @@ const placeOrder = async (req, res) => {
 // All order data for Admin Panel
 const allOrders = async (req, res) => {
   try {
-    const orders = await orderModel.find({})
-    res.json({ success: true, orders });
+    const { page = 1, limit = 10, search = '' } = req.query;
+    const skip = (page - 1) * limit;
+
+    let query = {};
+    if (search) {
+      query = {
+        $or: [
+          { 'address.firstName': { $regex: search, $options: 'i' } },
+          { 'address.lastName': { $regex: search, $options: 'i' } }
+        ]
+      };
+    }
+
+    const orders = await orderModel.find(query).skip(skip).limit(parseInt(limit)).sort({ date: -1 });
+    const totalOrders = await orderModel.countDocuments(query);
+
+    res.json({
+      success: true,
+      orders,
+      totalPages: Math.ceil(totalOrders / limit),
+      currentPage: parseInt(page),
+      totalOrders
+    });
   } catch (error) {
     console.log(error);
     res.json({ success: false, message: error.message });
@@ -108,4 +129,16 @@ const updateStatus = async (req, res) => {
 
 
 
-export { placeOrder, allOrders, userOrders, updateStatus }
+// Delete Order
+const deleteOrder = async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    await orderModel.findByIdAndDelete(orderId);
+    res.json({ success: true, message: "Order Deleted Successfully" });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+export { placeOrder, allOrders, userOrders, updateStatus, deleteOrder }
