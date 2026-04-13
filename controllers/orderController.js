@@ -17,7 +17,7 @@ const placeOrder = async (req, res) => {
   try {
     const { userId, items, amount, address } = req.body;
     const orderData = {
-      userId,
+      userId: userId || "guest",
       items,
       address,
       amount,
@@ -29,14 +29,29 @@ const placeOrder = async (req, res) => {
     const newOrder = new orderModel(orderData)
     await newOrder.save();
 
-    // Send Email
-    const user = await userModel.findById(userId);
-    if (user?.email) {
-      await sendOrderEmail(user.email, items, amount);
+    // Send Email to Buyer
+    const buyerEmail = address?.email || req.body.email;
+    if (buyerEmail) {
+      await sendOrderEmail(buyerEmail, items, amount);
+    } else if (userId) {
+      const user = await userModel.findById(userId);
+      if (user?.email) {
+        await sendOrderEmail(user.email, items, amount);
+      }
+    }
+    
+    // Send Email to Admin
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (adminEmail) {
+      await sendOrderEmail(adminEmail, items, amount);
     }
 
-    await userModel.findByIdAndUpdate(userId, { cartData: {} });
-    res.json({ success: true, message: "Order Placed Successfully", });
+    // Clear cart if logged in
+    if (userId) {
+        await userModel.findByIdAndUpdate(userId, { cartData: {} });
+    }
+    
+    res.json({ success: true, message: "Order Placed Successfully", order: newOrder });
 
   } catch (error) {
     console.log(error);

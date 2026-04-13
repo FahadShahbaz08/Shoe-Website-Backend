@@ -2,6 +2,7 @@ import express from 'express';
 import { placeOrder, allOrders, userOrders, updateStatus, deleteOrder } from '../controllers/orderController.js';
 import adminAuth from '../middleware/adminAuth.js';
 import authUser from '../middleware/auth.js';
+import optionalAuth from '../middleware/optionalAuth.js';
 
 const orderRouter = express.Router();
 
@@ -11,7 +12,7 @@ orderRouter.post('/status', adminAuth, updateStatus);
 orderRouter.post('/delete', adminAuth, deleteOrder);
 
 // Payment features
-orderRouter.post('/place', authUser, placeOrder);
+orderRouter.post('/place', optionalAuth, placeOrder);
 
 // User features
 orderRouter.post('/userorders', authUser, userOrders);
