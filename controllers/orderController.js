@@ -1,6 +1,5 @@
 import orderModel from "../models/orderModel.js";
 import userModel from "../models/userModel.js";
-import { sendOrderEmail } from "../config/emailService.js";
 import { sendAdminOrderEmail } from "../config/emailService.js";
 import { sendInvoiceEmail } from "../config/emailService.js";
 import { generateInvoice } from "../config/invoiceGenerator.js";
@@ -53,7 +52,7 @@ const placeOrder = async (req, res) => {
         // }
         
         // Send email to admin
-        const adminEmail = process.env.ADMIN_EMAIL;
+        const adminEmail = process.env.ORDER_ALERT_EMAIL || process.env.EMAIL_USER;
         if (adminEmail) {
           sideEffectTasks.push(sendAdminOrderEmail(adminEmail, newOrder));
         }
