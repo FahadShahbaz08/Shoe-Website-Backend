@@ -1,21 +1,40 @@
 import nodemailer from "nodemailer";
 
+const emailUser = process.env.EMAIL_USER;
+const emailPass = process.env.EMAIL_PASS;
+const hasEmailConfig = Boolean(emailUser && emailPass);
+
+const transporter = hasEmailConfig
+  ? nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: emailUser,
+        pass: emailPass,
+      },
+    })
+  : null;
+
+const logEmailConfigWarning = () => {
+  if (!hasEmailConfig) {
+    console.error(
+      "Email is not configured. Set EMAIL_USER and EMAIL_PASS (Gmail App Password) in backend environment."
+    );
+  }
+};
+
 // Order Confirmation Email
 export const sendOrderEmail = async (toEmail, items, amount) => {
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-  });
+  if (!hasEmailConfig || !transporter) {
+    logEmailConfigWarning();
+    return;
+  }
 
   const itemList = items.map((item, i) =>
     `${i + 1}. ${item.name} (Qty: ${item.quantity}) - Rs${item.price}`
   ).join('\n');
 
   const mailOptions = {
-    from: `"ForEver" <${process.env.EMAIL_USER}>`,
+    from: `"ForEver" <${emailUser}>`,
     to: toEmail,
     subject: "🛒 Order Confirmation - Thank You for Shopping!",
     text: `Your order has been placed successfully.\n\nItems:\n${itemList}\n\nTotal Amount: Rs${amount}\n\nWe will deliver it soon. Thank you! 😊`
@@ -29,18 +48,74 @@ export const sendOrderEmail = async (toEmail, items, amount) => {
   }
 };
 
-// Invoice Email with PDF Attachment
-export const sendInvoiceEmail = async (toEmail, pdfBuffer) => {
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-  });
+// Admin notification for new order
+export const sendAdminOrderEmail = async (adminEmail, order) => {
+  if (!hasEmailConfig || !transporter) {
+    logEmailConfigWarning();
+    return;
+  }
+
+  if (!adminEmail) {
+    console.error("ADMIN_EMAIL is missing. Admin order email was not sent.");
+    return;
+  }
+
+  const items = order?.items || [];
+  const itemList = items
+    .map((item, i) => `${i + 1}. ${item.name} | Qty: ${item.quantity} | Size: ${item.size || "N/A"}`)
+    .join("\n");
+
+  const customerName = `${order?.address?.firstName || ""} ${order?.address?.lastName || ""}`.trim() || "N/A";
+  const customerEmail = order?.address?.email || "N/A";
+  const customerPhone = order?.address?.phone || "N/A";
+  const fullAddress = [
+    order?.address?.street,
+    order?.address?.city,
+    order?.address?.state,
+    order?.address?.pinCode,
+    order?.address?.country,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   const mailOptions = {
-    from: `"ForEver" <${process.env.EMAIL_USER}>`,
+    from: `"ForEver" <${emailUser}>`,
+    to: adminEmail,
+    subject: `New Order Received - ${customerName}`,
+    text: `A new order has been placed.
+
+Order ID: ${order?._id || "N/A"}
+Order Date: ${new Date(order?.date || Date.now()).toLocaleString()}
+Payment Method: ${order?.paymentMethod || "COD"}
+Total Amount: Rs${order?.amount ?? "N/A"}
+
+Customer Name: ${customerName}
+Customer Email: ${customerEmail}
+Customer Phone: ${customerPhone}
+Shipping Address: ${fullAddress || "N/A"}
+
+Items:
+${itemList || "No items found"}
+`,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log("✅ Admin order email sent to", adminEmail);
+  } catch (err) {
+    console.error("❌ Error sending admin order email:", err);
+  }
+};
+
+// Invoice Email with PDF Attachment
+export const sendInvoiceEmail = async (toEmail, pdfBuffer) => {
+  if (!hasEmailConfig || !transporter) {
+    logEmailConfigWarning();
+    return;
+  }
+
+  const mailOptions = {
+    from: `"ForEver" <${emailUser}>`,
     to: toEmail,
     subject: "📦 Your Order Invoice - Delivered",
     text: `Hi there,

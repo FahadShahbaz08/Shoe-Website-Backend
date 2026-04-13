@@ -1,6 +1,7 @@
 import orderModel from "../models/orderModel.js";
 import userModel from "../models/userModel.js";
 import { sendOrderEmail } from "../config/emailService.js";
+import { sendAdminOrderEmail } from "../config/emailService.js";
 import { sendInvoiceEmail } from "../config/emailService.js";
 import { generateInvoice } from "../config/invoiceGenerator.js";
 
@@ -29,29 +30,49 @@ const placeOrder = async (req, res) => {
     const newOrder = new orderModel(orderData)
     await newOrder.save();
 
-    // Send Email to Buyer
-    const buyerEmail = address?.email || req.body.email;
-    if (buyerEmail) {
-      await sendOrderEmail(buyerEmail, items, amount);
-    } else if (userId) {
-      const user = await userModel.findById(userId);
-      if (user?.email) {
-        await sendOrderEmail(user.email, items, amount);
-      }
-    }
-    
-    // Send Email to Admin
-    const adminEmail = process.env.ADMIN_EMAIL;
-    if (adminEmail) {
-      await sendOrderEmail(adminEmail, items, amount);
-    }
-
-    // Clear cart if logged in
-    if (userId) {
-        await userModel.findByIdAndUpdate(userId, { cartData: {} });
-    }
-    
     res.json({ success: true, message: "Order Placed Successfully", order: newOrder });
+    
+    // Run non-critical side effects in background so API response is instant.
+    setImmediate(async () => {
+      try {
+        const sideEffectTasks = [];
+
+        // Send email to buyer (disabled as requested)
+        // const buyerEmail = address?.email || req.body.email;
+        // if (buyerEmail) {
+        //   sideEffectTasks.push(sendOrderEmail(buyerEmail, items, amount));
+        // } else if (userId) {
+        //   sideEffectTasks.push(
+        //     userModel.findById(userId).then((user) => {
+        //       if (user?.email) {
+        //         return sendOrderEmail(user.email, items, amount);
+        //       }
+        //       return null;
+        //     })
+        //   );
+        // }
+        
+        // Send email to admin
+        const adminEmail = process.env.ADMIN_EMAIL;
+        if (adminEmail) {
+          sideEffectTasks.push(sendAdminOrderEmail(adminEmail, newOrder));
+        }
+
+        // Clear cart if logged in
+        if (userId) {
+          sideEffectTasks.push(userModel.findByIdAndUpdate(userId, { cartData: {} }));
+        }
+
+        const results = await Promise.allSettled(sideEffectTasks);
+        results.forEach((result) => {
+          if (result.status === "rejected") {
+            console.error("Order side effect failed:", result.reason);
+          }
+        });
+      } catch (backgroundError) {
+        console.error("Background order side effects failed:", backgroundError);
+      }
+    });
 
   } catch (error) {
     console.log(error);
