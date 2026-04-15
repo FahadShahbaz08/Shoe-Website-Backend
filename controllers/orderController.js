@@ -1,6 +1,7 @@
 import orderModel from "../models/orderModel.js";
 import userModel from "../models/userModel.js";
 import { sendAdminOrderEmail } from "../config/emailService.js";
+import { sendOrderEmail } from "../config/emailService.js";
 import { sendInvoiceEmail } from "../config/emailService.js";
 import { generateInvoice } from "../config/invoiceGenerator.js";
 
@@ -36,23 +37,23 @@ const placeOrder = async (req, res) => {
       try {
         const sideEffectTasks = [];
 
-        // Send email to buyer (disabled as requested)
-        // const buyerEmail = address?.email || req.body.email;
-        // if (buyerEmail) {
-        //   sideEffectTasks.push(sendOrderEmail(buyerEmail, items, amount));
-        // } else if (userId) {
-        //   sideEffectTasks.push(
-        //     userModel.findById(userId).then((user) => {
-        //       if (user?.email) {
-        //         return sendOrderEmail(user.email, items, amount);
-        //       }
-        //       return null;
-        //     })
-        //   );
-        // }
+        // Send confirmation email to the customer (guest or logged-in user).
+        const buyerEmail = address?.email || req.body.email;
+        if (buyerEmail) {
+          sideEffectTasks.push(sendOrderEmail(buyerEmail, items, amount));
+        } else if (userId && userId !== "guest") {
+          sideEffectTasks.push(
+            userModel.findById(userId).then((user) => {
+              if (user?.email) {
+                return sendOrderEmail(user.email, items, amount);
+              }
+              return null;
+            })
+          );
+        }
         
-        // Send email to admin
-        const adminEmail = process.env.ORDER_ALERT_EMAIL || process.env.EMAIL_USER;
+        // Send alert email to the configured admin receiver.
+        const adminEmail = process.env.ORDER_ALERT_EMAIL || process.env.ADMIN_EMAIL;
         if (adminEmail) {
           sideEffectTasks.push(sendAdminOrderEmail(adminEmail, newOrder));
         }
@@ -135,23 +136,31 @@ const updateStatus = async (req, res) => {
 
     // Step 1: Update the order status
     const updatedOrder = await orderModel.findByIdAndUpdate(orderId, { status }, { new: true });
+    if (!updatedOrder) {
+      return res.json({ success: false, message: "Order not found" });
+    }
 
     // Step 2: Check if status is "Delivered"
     if (status === "Delivered") {
-      // Populate user for email
-      const user = await userModel.findById(updatedOrder.userId);
-      if (!user?.email) {
-        return res.json({ success: false, message: "User email not found" });
+      // Invoice recipient: prefer order address email, fallback to user email.
+      let recipientEmail = updatedOrder?.address?.email;
+      if (!recipientEmail && updatedOrder?.userId && updatedOrder.userId !== "guest") {
+        const user = await userModel.findById(updatedOrder.userId);
+        recipientEmail = user?.email;
       }
 
-      // Add user details to order (for invoice)
-      updatedOrder.user = { email: user.email };
+      if (!recipientEmail) {
+        return res.json({ success: false, message: "Customer email not found for invoice" });
+      }
+
+      // Add recipient details to order object (used by invoice template if needed).
+      updatedOrder.user = { email: recipientEmail };
 
       // Step 3: Generate invoice PDF
       const invoiceBuffer = await generateInvoice(updatedOrder);
 
       // Step 4: Send Invoice Email
-      await sendInvoiceEmail(user.email, invoiceBuffer);
+      await sendInvoiceEmail(recipientEmail, invoiceBuffer);
     }
 
     res.json({ success: true, message: "Status Updated" });
