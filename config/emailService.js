@@ -19,21 +19,21 @@ const hasEmailConfig = Boolean(emailUser && emailPass && fromEmail);
 const transporter = hasEmailConfig
   ? isBrevo
     ? nodemailer.createTransport({
-        host: process.env.BREVO_SMTP_HOST || "smtp-relay.brevo.com",
-        port: Number(process.env.BREVO_SMTP_PORT || 587),
-        secure: false,
-        auth: {
-          user: emailUser,
-          pass: emailPass,
-        },
-      })
+      host: process.env.BREVO_SMTP_HOST || "smtp-relay.brevo.com",
+      port: Number(process.env.BREVO_SMTP_PORT || 587),
+      secure: false,
+      auth: {
+        user: emailUser,
+        pass: emailPass,
+      },
+    })
     : nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-          user: emailUser,
-          pass: emailPass,
-        },
-      })
+      service: "gmail",
+      auth: {
+        user: emailUser,
+        pass: emailPass,
+      },
+    })
   : null;
 
 const logEmailConfigWarning = () => {
@@ -66,7 +66,45 @@ export const sendOrderEmail = async (toEmail, items, amount) => {
     from: `"${fromName}" <${fromEmail}>`,
     to: toEmail,
     subject: "🛒 Order Confirmation - Thank You for Shopping!",
-    text: `Your order has been placed successfully.\n\nItems:\n${itemList}\n\nTotal Amount: Rs${amount}\n\nWe will deliver it soon. Thank you! 😊`
+    html: `
+  <div style="font-family: Arial, sans-serif; max-width:600px; margin:auto; background:#f9f9f9; padding:20px;">
+    
+    <div style="background:#000; color:#fff; padding:15px; text-align:center; border-radius:8px 8px 0 0;">
+      <h2 style="margin:0;">Emballished Craft</h2>
+    </div>
+
+    <div style="background:#fff; padding:20px; border-radius:0 0 8px 8px;">
+      <h3 style="color:#333;">Thank you for your order!</h3>
+      <p style="color:#555;">Your order has been placed successfully. Here are the details:</p>
+
+      <div style="margin:15px 0; padding:10px; background:#f1f1f1; border-radius:6px;">
+        ${items.map((item, i) => `
+          <p style="margin:5px 0;">
+            <strong>${i + 1}. ${item.name}</strong><br/>
+            Qty: ${item.quantity} | Rs ${item.price}
+          </p>
+        `).join("")}
+      </div>
+
+      <h3 style="color:#000;">Total: Rs ${amount}</h3>
+
+      <div style="text-align:center; margin:20px 0;">
+        <a href="https://emballishedcraft.com" 
+           style="background:#000; color:#fff; padding:12px 20px; text-decoration:none; border-radius:5px;">
+           Visit Store
+        </a>
+      </div>
+
+      <p style="color:#777;">We’ll deliver your order soon. Thank you for shopping with us! 😊</p>
+    </div>
+
+    <div style="text-align:center; font-size:12px; color:#999; margin-top:20px;">
+      <p>Developed by Fahad (<a href="https://fahadshahbaz.fun">fahadshahbaz.fun</a>)</p>
+      <p>© 2026 Emballished Craft. All rights reserved.</p>
+    </div>
+
+  </div>
+  `
   };
 
   try {
